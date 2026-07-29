@@ -1,0 +1,34 @@
+@startuml
+
+participant RequestDispatcher
+participant MiddlewarePipeline
+participant Middleware1
+participant Middleware2
+participant MiddlewareN
+
+RequestDispatcher -> MiddlewarePipeline : execute(req, res)
+
+activate MiddlewarePipeline
+
+MiddlewarePipeline -> Middleware1 : invoke(req, res, next)
+activate Middleware1
+
+Middleware1 -> Middleware2 : next()
+activate Middleware2
+
+Middleware2 -> MiddlewareN : next()
+activate MiddlewareN
+
+MiddlewareN --> Middleware2
+deactivate MiddlewareN
+
+Middleware2 --> Middleware1
+deactivate Middleware2
+
+Middleware1 --> MiddlewarePipeline
+deactivate Middleware1
+
+MiddlewarePipeline --> RequestDispatcher : completed
+deactivate MiddlewarePipeline
+
+@enduml

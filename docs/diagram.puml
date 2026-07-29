@@ -1,0 +1,84 @@
+@startuml
+
+interface IRouterContext {
+    {method} + getRouteRegistry() : RouteRegistry
+    {method} + getMiddlewarePipeline() : MiddlewarePipeline
+    {method} + getStaticManager() : IStaticManager
+}
+
+interface IStaticManager {
+    {method} + add(path : string) : void
+    {method} + serve(req : Request, res : Response) : boolean
+}
+
+class DefaultRouterContext {
+    {field} - routes : RouteRegistry
+    {field} - middleware : MiddlewarePipeline
+    {field} - staticManager : IStaticManager
+}
+
+class Router {
+    {field} - context : IRouterContext
+    {field} - dispatcher : RequestDispatcher
+
+    {method} + get(path : string, handler : function) : void
+    {method} + post(path : string, handler : function) : void
+    {method} + put(path : string, handler : function) : void
+    {method} + patch(path : string, handler : function) : void
+    {method} + delete(path : string, handler : function) : void
+    {method} + use(middleware : function) : void
+    {method} + handle(req : Request, res : Response) : void
+}
+
+class RouteRegistry {
+    {field} - routes : Route[]
+
+    {method} + register(method : string, path : string, handler : function) : void
+    {method} + find(req : Request) : Route
+}
+
+class MiddlewarePipeline {
+    {field} - middlewares : Middleware[]
+    {field} - errorMiddlewares : ErrorMiddleware[]
+
+    {method} + use(middleware : function) : void
+    {method} + execute(req : Request, res : Response, next : function) : void
+}
+
+class StaticManager {
+    {field} - staticPaths : string[]
+    {field} - mime : MIME
+
+    {method} + add(path : string) : void
+    {method} + serve(req : Request, res : Response) : boolean
+}
+
+class RequestDispatcher {
+    {method} + dispatch(req : Request, res : Response, context : IRouterContext) : void
+}
+
+class MIME {
+    {field} - table : object
+
+    {method} + mapToType(req : Request) : string
+}
+
+IRouterContext <|.. DefaultRouterContext
+IStaticManager <|.. StaticManager
+
+Router "1" *-- "1" RequestDispatcher : owns
+Router "1" --> "1" IRouterContext : stores
+
+DefaultRouterContext "1" *-- "1" RouteRegistry : owns
+DefaultRouterContext "1" *-- "1" MiddlewarePipeline : owns
+DefaultRouterContext "1" *-- "1" IStaticManager : owns
+
+RouteRegistry "1" *-- "0..*" Route : registers
+MiddlewarePipeline "1" *-- "0..*" Middleware : contains
+MiddlewarePipeline "1" *-- "0..*" ErrorMiddleware : contains
+
+StaticManager "1" *-- "1" MIME : owns
+
+RequestDispatcher "1" --> "1" IRouterContext : accesses
+
+@enduml

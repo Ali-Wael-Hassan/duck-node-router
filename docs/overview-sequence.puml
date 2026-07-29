@@ -1,0 +1,38 @@
+@startuml
+
+actor Client
+
+participant Router
+participant RequestDispatcher
+participant IRouterContext
+
+Client -> Router : handle(req, res)
+
+Router -> RequestDispatcher : dispatch(req, res, context)
+
+RequestDispatcher -> IRouterContext : getMiddlewarePipeline()
+IRouterContext --> RequestDispatcher : MiddlewarePipeline
+
+RequestDispatcher -> MiddlewarePipeline : execute(req, res)
+
+RequestDispatcher -> IRouterContext : getStaticManager()
+IRouterContext --> RequestDispatcher : IStaticManager
+
+RequestDispatcher -> IStaticManager : serve(req, res)
+
+alt Request handled
+    IStaticManager --> Client : Response
+else Continue
+    RequestDispatcher -> IRouterContext : getRouteRegistry()
+    IRouterContext --> RequestDispatcher : RouteRegistry
+
+    RequestDispatcher -> RouteRegistry : find(req)
+
+    alt Route found
+        RouteRegistry --> Client : Response
+    else Route not found
+        RequestDispatcher --> Client : 404 Not Found
+    end
+end
+
+@enduml
