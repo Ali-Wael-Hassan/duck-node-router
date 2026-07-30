@@ -51,6 +51,7 @@ class MiddlewarePipeline {
 
     {method} + use(middleware : function) : void
     {method} + execute(req : Request, res : Response, next : function) : Promise<void>
+    {method} - executeError(err : Error, req : Request, res : Response, next : function) : Promise<void>
 }
 
 class StaticManager {
