@@ -1,5 +1,9 @@
+const { normalizeUrl } = require('../utils');
+
 class RequestDispatcher {
     async dispatch(req, res, context) {
+        normalizeUrl(req);
+        
         const route = context.RouteRegistry.find(req.method, req.url);
 
         if (route) {
