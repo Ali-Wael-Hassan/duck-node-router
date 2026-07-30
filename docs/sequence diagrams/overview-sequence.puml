@@ -13,7 +13,18 @@ Client -> Router : handle(req, res)
 
 Router -> RequestDispatcher : dispatch(req, res, context)
 
-RequestDispatcher -> RouterContext : getMiddlewarePipeline()
+RequestDispatcher -> RouterContext : RouteRegistry
+RouterContext --> RequestDispatcher : RouteRegistry
+
+RequestDispatcher -> RouteRegistry : find(method, url)
+alt Route found
+    RouteRegistry --> RequestDispatcher : RouteMatch
+    RequestDispatcher -> RequestDispatcher : Attach params\nreq.params = route.params
+else Route not found
+    RouteRegistry --> RequestDispatcher : null
+end
+
+RequestDispatcher -> RouterContext : MiddlewarePipeline
 RouterContext --> RequestDispatcher : MiddlewarePipeline
 
 RequestDispatcher -> MiddlewarePipeline : execute(req, res)
@@ -22,19 +33,11 @@ MiddlewarePipeline --> RequestDispatcher
 alt Response already sent
     RequestDispatcher --> Client : Response
 else Continue
-    RequestDispatcher -> RouterContext : getRouteRegistry()
-    RouterContext --> RequestDispatcher : RouteRegistry
-
-    RequestDispatcher -> RouteRegistry : find(method, url)
-
-    alt Route found
-        RouteRegistry --> RequestDispatcher : RouteMatch
-
+    alt Route not found
+        RequestDispatcher --> Client : 404 Not Found
+    else Route found
         RequestDispatcher -> RouteHandler : handler(req, res)
         RouteHandler --> Client : Response
-    else Route not found
-        RouteRegistry --> RequestDispatcher : null
-        RequestDispatcher --> Client : 404 Not Found
     end
 end
 

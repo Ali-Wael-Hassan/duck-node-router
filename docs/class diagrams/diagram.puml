@@ -1,11 +1,8 @@
 @startuml Router
 
 class RouterContext {
-    {field} - routes : RouteRegistry
-    {field} - middleware : MiddlewarePipeline
-
-    {method} + getRouteRegistry() : RouteRegistry
-    {method} + getMiddlewarePipeline() : MiddlewarePipeline
+    {field} + RouteRegistry : RouteRegistry
+    {field} + MiddlewarePipeline : MiddlewarePipeline
 }
 
 class Router {

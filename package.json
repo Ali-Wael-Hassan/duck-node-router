@@ -1,0 +1,12 @@
+{
+    "name": "router",
+    "version": "1.0.0",
+    "private": true,
+    "description": "Lightweight Express-inspired HTTP Router built from scratch",
+    "main": "src/index.js",
+    "scripts": {
+        "test": "node --test tests/*.js",
+        "example": "node examples/index.js"
+    },
+    "type": "commonjs"
+}

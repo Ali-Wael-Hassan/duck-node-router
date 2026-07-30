@@ -105,9 +105,10 @@ class RouteTrie {
         const methodIndex = METHOD[method];
 
         const params = {};
-        let parameterIndex = 0;
+        let backtrack = null;
+        let i;
 
-        for (let i = 0; i < path.length;) {
+        for (i = 0; i < path.length;) {
 
             const index = path.charCodeAt(i);
 
@@ -122,15 +123,20 @@ class RouteTrie {
             if (this.nodes[current].parameter !== -1) {
 
                 let value = "";
+                const start = i;
 
                 while (i < path.length && path[i] !== '/') {
                     value += path[i];
                     i++;
                 }
 
+                if (this.nodes[current].wildcard !== -1) {
+                    backtrack = { node: current, start, params: { ...params } };
+                }
+
                 params[
                     this.nodes[current]
-                        .parameterNames[methodIndex][parameterIndex++]
+                        .parameterNames[methodIndex][0]
                 ] = value;
 
                 current = this.nodes[current].parameter;
@@ -144,10 +150,18 @@ class RouteTrie {
                 break;
             }
 
+            if (backtrack) break;
             return null;
         }
 
-        const handlerIndex = this.nodes[current].handlers[methodIndex];
+        let handlerIndex = this.nodes[current].handlers[methodIndex];
+
+        if ((handlerIndex === -1 || i < path.length) && backtrack) {
+            Object.assign(params, backtrack.params);
+            current = this.nodes[backtrack.node].wildcard;
+            params["*"] = path.substring(backtrack.start);
+            handlerIndex = this.nodes[current].handlers[methodIndex];
+        }
 
         if (handlerIndex === -1)
             return null;
