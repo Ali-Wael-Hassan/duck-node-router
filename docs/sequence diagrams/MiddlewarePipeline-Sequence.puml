@@ -5,9 +5,8 @@ participant MiddlewarePipeline
 participant Middleware1
 participant Middleware2
 participant MiddlewareN
-participant NextHandler
 
-RequestDispatcher -> MiddlewarePipeline : execute(req, res, next)
+RequestDispatcher -> MiddlewarePipeline : execute(req, res)
 
 activate MiddlewarePipeline
 
@@ -19,12 +18,6 @@ activate Middleware2
 
 Middleware2 -> MiddlewareN : next()
 activate MiddlewareN
-
-MiddlewareN -> NextHandler : next()
-activate NextHandler
-
-NextHandler --> MiddlewareN
-deactivate NextHandler
 
 MiddlewareN --> Middleware2
 deactivate MiddlewareN

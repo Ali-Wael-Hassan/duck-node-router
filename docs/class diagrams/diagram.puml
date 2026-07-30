@@ -26,8 +26,8 @@ class MiddlewarePipeline {
     {field} - errorMiddlewares : function[]
 
     {method} + use(middleware : function) : void
-    {method} + execute(req : Request, res : Response, next : function) : Promise<void>
-    {method} - executeError(err : Error, req : Request, res : Response, next : function) : Promise<void>
+    {method} + execute(req : Request, res : Response) : Promise<void>
+    {method} - executeError(err : Error, req : Request, res : Response) : Promise<void>
 }
 
 class RouteRegistry {

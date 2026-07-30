@@ -4,33 +4,36 @@ actor Client
 
 participant Router
 participant RequestDispatcher
-participant IRouterContext
+participant RouterContext
+participant MiddlewarePipeline
+participant RouteRegistry
+participant RouteHandler
 
 Client -> Router : handle(req, res)
 
 Router -> RequestDispatcher : dispatch(req, res, context)
 
-RequestDispatcher -> IRouterContext : getMiddlewarePipeline()
-IRouterContext --> RequestDispatcher : MiddlewarePipeline
+RequestDispatcher -> RouterContext : getMiddlewarePipeline()
+RouterContext --> RequestDispatcher : MiddlewarePipeline
 
 RequestDispatcher -> MiddlewarePipeline : execute(req, res)
+MiddlewarePipeline --> RequestDispatcher
 
-RequestDispatcher -> IRouterContext : getStaticManager()
-IRouterContext --> RequestDispatcher : IStaticManager
-
-RequestDispatcher -> IStaticManager : serve(req, res)
-
-alt Request handled
-    IStaticManager --> Client : Response
+alt Response already sent
+    RequestDispatcher --> Client : Response
 else Continue
-    RequestDispatcher -> IRouterContext : getRouteRegistry()
-    IRouterContext --> RequestDispatcher : RouteRegistry
+    RequestDispatcher -> RouterContext : getRouteRegistry()
+    RouterContext --> RequestDispatcher : RouteRegistry
 
-    RequestDispatcher -> RouteRegistry : find(req)
+    RequestDispatcher -> RouteRegistry : find(method, url)
 
     alt Route found
-        RouteRegistry --> Client : Response
+        RouteRegistry --> RequestDispatcher : RouteMatch
+
+        RequestDispatcher -> RouteHandler : handler(req, res)
+        RouteHandler --> Client : Response
     else Route not found
+        RouteRegistry --> RequestDispatcher : null
         RequestDispatcher --> Client : 404 Not Found
     end
 end

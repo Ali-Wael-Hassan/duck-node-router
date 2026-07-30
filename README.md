@@ -4,7 +4,7 @@ A lightweight **Express-inspired HTTP Router** built from scratch using Node.js.
 
 The goal of this project is to understand how modern web frameworks are designed internally by implementing the routing engine, middleware pipeline, request dispatcher, and modular architecture instead of relying on existing frameworks.
 
-The router is intentionally kept focused on **routing and request orchestration**. Features such as static file serving, logging, compression, and live reloading are designed as reusable middleware rather than built into the router itself.
+The router is intentionally focused on **routing and request orchestration**. Features such as static file serving, logging, compression, and live reloading are designed as reusable middleware built on top of the router instead of being embedded into its core.
 
 ---
 
@@ -32,13 +32,13 @@ The router is intentionally kept focused on **routing and request orchestration*
 | Component              | Responsibility                                              |
 | ---------------------- | ----------------------------------------------------------- |
 | **Router**             | Public API (`get`, `post`, `put`, `patch`, `delete`, `use`) |
-| **RouterContext**      | Owns the router's internal services                         |
-| **RequestDispatcher**  | Coordinates the request lifecycle                           |
+| **RouterContext**      | Owns and exposes the router's internal services             |
+| **RequestDispatcher**  | Coordinates the complete request lifecycle                  |
 | **RouteRegistry**      | Route registration, validation, and lookup                  |
 | **RouteTrie**          | Efficient route storage and matching                        |
 | **MiddlewarePipeline** | Executes middleware and error middleware                    |
 
-> The router core is intentionally independent of built-in features. Static file serving, logging, compression, live reloading, and similar functionality are implemented as middleware on top of the routing engine.
+> The router core is intentionally independent of higher-level features. Static file serving, logging, compression, HTML transformation, and live reloading are implemented as middleware, allowing them to be composed without modifying the routing engine.
 
 ---
 
@@ -54,7 +54,8 @@ src/
 │   ├── RouteRegistry.js
 │   ├── RouteTrie.js
 │   ├── RouteNode.js
-│   └── MiddlewarePipeline.js
+│   ├── MiddlewarePipeline.js
+│   └── index.js
 │
 ├── middleware/
 │   ├── static.js
@@ -74,6 +75,8 @@ src/
 # Example
 
 ```js
+const { Router } = require("./src");
+
 const app = new Router();
 
 app.use(logger());
@@ -112,13 +115,18 @@ await app.handle(req, res);
 * [x] Duplicate route detection
 * [x] Automatic `req.params` extraction
 
+### Middleware
+
+* [x] Synchronous middleware
+* [x] Asynchronous middleware
+* [x] Error middleware
+* [x] Onion execution model
+
 ---
 
 ## 🚧 In Progress
 
-* [x] Middleware execution
-* [x] Error middleware
-* [ ] Request dispatcher implementation
+* [ ] Request dispatcher integration
 * [ ] Async route handler support
 
 ---
