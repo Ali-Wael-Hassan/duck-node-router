@@ -1,4 +1,4 @@
-@startuml
+@startuml High-level Overview
 
 actor Client
 

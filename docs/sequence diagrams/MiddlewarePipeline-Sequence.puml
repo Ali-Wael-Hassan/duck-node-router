@@ -1,4 +1,4 @@
-@startuml
+@startuml Middleware
 
 participant RequestDispatcher
 participant MiddlewarePipeline

@@ -1,4 +1,4 @@
-@startuml
+@startuml Router
 
 interface IRouterContext {
     {method} + getRouteRegistry() : RouteRegistry
