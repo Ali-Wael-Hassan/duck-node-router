@@ -8,7 +8,7 @@ interface IRouterContext {
 
 interface IStaticManager {
     {method} + add(path : string) : void
-    {method} + serve(req : Request, res : Response) : boolean
+    {method} + serve(req : Request, res : Response) : Promise<boolean>
 }
 
 class DefaultRouterContext {
@@ -27,14 +27,22 @@ class Router {
     {method} + patch(path : string, handler : function) : void
     {method} + delete(path : string, handler : function) : void
     {method} + use(middleware : function) : void
-    {method} + handle(req : Request, res : Response) : void
+    {method} + handle(req : Request, res : Response) : Promise<void>
 }
 
 class RouteRegistry {
-    {field} - routes : Route[]
+    {field} - trie : RouteTrie
 
     {method} + register(method : string, path : string, handler : function) : void
-    {method} + find(req : Request) : Route
+    {method} + find(method : string, path : string) : RouteMatch
+}
+
+class RouteTrie {
+    {field} - nodes : RouteNode[]
+    {field} - handlers : function[]
+
+    {method} + insert(method : string, path : string, handler : function) : void
+    {method} + find(method : string, path : string) : RouteMatch
 }
 
 class MiddlewarePipeline {
@@ -42,7 +50,7 @@ class MiddlewarePipeline {
     {field} - errorMiddlewares : ErrorMiddleware[]
 
     {method} + use(middleware : function) : void
-    {method} + execute(req : Request, res : Response, next : function) : void
+    {method} + execute(req : Request, res : Response, next : function) : Promise<void>
 }
 
 class StaticManager {
@@ -50,17 +58,22 @@ class StaticManager {
     {field} - mime : MIME
 
     {method} + add(path : string) : void
-    {method} + serve(req : Request, res : Response) : boolean
+    {method} + serve(req : Request, res : Response) : Promise<boolean>
 }
 
 class RequestDispatcher {
-    {method} + dispatch(req : Request, res : Response, context : IRouterContext) : void
+    {method} + dispatch(req : Request, res : Response, context : IRouterContext) : Promise<void>
 }
 
 class MIME {
     {field} - table : object
 
     {method} + mapToType(req : Request) : string
+}
+
+class RouteMatch {
+    {field} + handler : function
+    {field} + params : object
 }
 
 IRouterContext <|.. DefaultRouterContext
@@ -73,7 +86,8 @@ DefaultRouterContext "1" *-- "1" RouteRegistry : owns
 DefaultRouterContext "1" *-- "1" MiddlewarePipeline : owns
 DefaultRouterContext "1" *-- "1" IStaticManager : owns
 
-RouteRegistry "1" *-- "0..*" Route : registers
+RouteRegistry "1" *-- "1" RouteTrie : owns
+
 MiddlewarePipeline "1" *-- "0..*" Middleware : contains
 MiddlewarePipeline "1" *-- "0..*" ErrorMiddleware : contains
 
