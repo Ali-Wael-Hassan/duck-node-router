@@ -13,6 +13,8 @@ Client -> Router : handle(req, res)
 
 Router -> RequestDispatcher : dispatch(req, res, context)
 
+RequestDispatcher -> RequestDispatcher : normalizeUrl(req)
+
 RequestDispatcher -> RouterContext : RouteRegistry
 RouterContext --> RequestDispatcher : RouteRegistry
 
@@ -30,7 +32,7 @@ RouterContext --> RequestDispatcher : MiddlewarePipeline
 RequestDispatcher -> MiddlewarePipeline : execute(req, res)
 MiddlewarePipeline --> RequestDispatcher
 
-alt Response already sent
+alt Response already sent (res.writableEnded || req.handled)
     RequestDispatcher --> Client : Response
 else Continue
     alt Route not found

@@ -11,26 +11,33 @@ The router is intentionally focused on **routing and request orchestration**. Fe
 # Architecture
 
 ```text
-                   Application
-                        │
-                        ▼
-                      Router
-                  ┌─────┴─────┐
-                  ▼           ▼
-         RequestDispatcher  RouterContext
-                  │           │
-                  │      ┌────┴────┐
-                  │      ▼         ▼
-                  │ RouteRegistry MiddlewarePipeline
-                  │      │
-                  │      ▼
-                  │   RouteTrie
-                  ▼
-             Route Handler
+                   StaticServer
+                        │  uses
+             ┌──────────┴──────────┐
+             ▼                     ▼
+      Built-in middleware    Application
+      (logger, cors,            │
+       directory,               ▼
+       static pipeline)       Router
+                          ┌─────┴─────┐
+                          ▼           ▼
+                 RequestDispatcher  RouterContext
+                          │           │
+                          │      ┌────┴────┐
+                          │      ▼         ▼
+                          │ RouteRegistry MiddlewarePipeline
+                          │      │
+                          │      ▼
+                          │   RouteTrie
+                          ▼
+                     Route Handler
 ```
+
+The `static` middleware is itself a composed pipeline (`resolve → cache → stream → compress → send`) built on the same `MiddlewarePipeline` used by the router.
 
 | Component | Responsibility |
 |-----------|----------------|
+| **StaticServer** | Ready-to-use static file server built on the router + built-in middleware |
 | **Router** | Public API (`get`, `post`, `put`, `patch`, `delete`, `use`) |
 | **RouterContext** | Owns and exposes the router's internal services |
 | **RequestDispatcher** | Coordinates the complete request lifecycle |
@@ -58,12 +65,21 @@ src/
 │
 ├── middleware/
 │   ├── bodyParser.js
+│   ├── cache.js
+│   ├── compress.js
 │   ├── cors.js
 │   ├── directory.js
 │   ├── injectScript.js
 │   ├── logger.js
+│   ├── resolve.js
+│   ├── send.js
 │   ├── static.js
+│   ├── stream.js
 │   ├── watch.js
+│   └── index.js
+│
+├── server/
+│   ├── StaticServer.js
 │   └── index.js
 │
 ├── utils/
@@ -106,8 +122,15 @@ app.use(logger());
 app.use(cors());
 app.use(bodyParser());
 
+app.get('/', (req, res) => {
+    res.end('Hello from Router!');
+});
+
 app.get('/users', (req, res) => {
-    res.end(JSON.stringify([{ id: 1, name: 'Alice' }, { id: 2, name: 'Bob' }]));
+    res.end(JSON.stringify([
+        { id: 1, name: 'Alice' },
+        { id: 2, name: 'Bob' }
+    ]));
 });
 
 app.get('/users/:id', (req, res) => {
@@ -140,14 +163,45 @@ app.get('/files/*', (req, res) => {
 });
 
 const server = http.createServer((req, res) => app.handle(req, res));
-server.listen(PORT, () => console.log(`Server running at http://localhost:${PORT}`));
+
+server.listen(PORT, () => {
+    console.log(`Server running at http://localhost:${PORT}`);
+});
 ```
+
+---
+
+# Static File Server
+
+`src/server/StaticServer.js` bundles the router with the static-serving middleware into a ready-to-use HTTP server.
+
+```js
+const { StaticServer } = require('./src/server');
+
+const server = new StaticServer({
+    root: './public',
+    directoryListing: true,       // serve directory listings
+    cors: { origin: '*' },        // enable CORS (use false to disable)
+    cache: { maxAge: 3600 },      // ETag / Last-Modified / Range caching
+    compression: { gzip: true }   // gzip / brotli compression
+});
+
+server.listen(3000);
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `root` | `'.'` | Directory to serve |
+| `directoryListing` | `false` | Generate directory listings via the `directory` middleware |
+| `cors` | `false` | CORS options, `false` disables it |
+| `cache` | `{}` | Cache / ETag / Range options passed to the `cache` middleware |
+| `compression` | `{}` | gzip / brotli options passed to the `compress` middleware |
 
 ---
 
 # Tests
 
-50 tests covering all modules, using Node's built-in test runner (`node:test`).
+63 tests covering all modules, using Node's built-in test runner (`node:test`).
 
 ```sh
 npm test
@@ -169,6 +223,20 @@ npm test
 | **directory** | Directory listing, index.html, non-directory fallthrough, missing dir |
 | **watch** | SSE endpoint, non-livereload passthrough |
 | **Integration** | Full HTTP server with GET, 404, body parsing, CORS |
+
+> See [Known Issues](#known-issues) — the `watch` middleware leaks an `fs.watch` handle, which can prevent `npm test` from exiting.
+
+---
+
+# Known Issues
+
+- **`watch` middleware leaks an `fs.watch` handle.** `watch()` calls `fs.watch(directory, { recursive: true }, ...)` once at setup and never closes it. Running the full test suite therefore leaves an active handle that prevents `node --test` from exiting; on Windows the recursive watcher over a removed directory can also keep allocating until the process runs out of memory. To work around it, run a targeted subset, e.g.:
+
+```sh
+node --test --test-name-pattern="MiddlewarePipeline" tests/index.js
+```
+
+---
 
 # Roadmap
 
@@ -211,12 +279,18 @@ npm test
 
 - [x] Body parser
 - [x] Logger
-- [x] Static file middleware
+- [x] Static file middleware (composed pipeline: resolve → cache → stream → compress → send)
 - [x] HTML script injection middleware
 - [x] Live reload middleware
 - [x] CORS
 - [x] Directory listing
-- [x] Test suite (50 tests)
+- [x] HTTP caching (ETag, Last-Modified, Range requests)
+- [x] Compression (gzip, brotli)
+- [x] Test suite (63 tests)
+
+### Projects Built on the Router
+
+- [x] Static file server (`StaticServer`)
 
 ---
 
@@ -224,6 +298,7 @@ npm test
 
 - [ ] Request wrapper
 - [ ] Response wrapper
+- [ ] Fix `watch` middleware `fs.watch` handle leak (see [Known Issues](#known-issues))
 
 ---
 
@@ -237,14 +312,12 @@ npm test
 
 ### Additional Middleware
 
-- [ ] Compression
 - [ ] Cookie parser
 - [ ] Session middleware
 - [ ] Rate limiting
 
 ### Projects Built on the Router
 
-- [ ] Static File Server
 - [ ] Live Server
 - [ ] File Explorer Server
 - [ ] Reverse Proxy

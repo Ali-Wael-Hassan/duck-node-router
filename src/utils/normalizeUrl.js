@@ -40,6 +40,7 @@ function normalizeUrl(req) {
     }
 
     req.url = normalized;
+    req.path = normalized;
 }
 
 module.exports = normalizeUrl;

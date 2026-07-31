@@ -1,35 +1,21 @@
-const fs = require("fs");
-const path = require("path");
+const MiddlewarePipeline = require('../router/MiddlewarePipeline');
 
-const MIME = require("../utils/MIME");
+const resolve = require('./resolve');
+const cache = require('./cache');
+const stream = require('./stream');
+const compress = require('./compress');
+const send = require('./send');
 
-const static = (root) => {
-    root = path.resolve(root);
+const static = (root, options = {}) => {
+    const pipeline = new MiddlewarePipeline();
 
-    return async (req, res, next) => {
-        const filePath = path.resolve(root, "." + req.url);
+    pipeline.use(resolve(root));
+    pipeline.use(cache(options.cache));
+    pipeline.use(stream());
+    pipeline.use(compress(options.compress));
+    pipeline.use(send());
 
-        if (!filePath.startsWith(root)) {
-            return next();
-        }
-
-        try {
-            const stat = await fs.stat();
-
-            if (!stat.isFile()) {
-                return next();
-            }
-
-            res.setHeader(
-                "Content-Type",
-                MIME.getType(filePath)
-            );
-
-            fs.createReadStream(filePath).pipe(res);
-        } catch {
-            next();
-        }
-    };
+    return pipeline.execute.bind(pipeline);
 };
 
 module.exports = static;

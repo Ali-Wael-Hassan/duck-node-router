@@ -1,12 +1,23 @@
 @startuml Dispatch
 
 participant RequestDispatcher
+participant RouteRegistry
 participant MiddlewarePipeline
 participant Middleware1
 participant Middleware2
 participant MiddlewareN
-participant RouteRegistry
 participant RouteHandler
+
+RequestDispatcher -> RequestDispatcher : normalizeUrl(req)
+
+RequestDispatcher -> RouteRegistry : find(method, url)
+
+alt Route found
+    RouteRegistry --> RequestDispatcher : RouteMatch
+    RequestDispatcher -> RequestDispatcher : Attach params\nreq.params = route.params
+else Route not found
+    RouteRegistry --> RequestDispatcher : null
+end
 
 RequestDispatcher -> MiddlewarePipeline : execute(req, res)
 
@@ -33,17 +44,13 @@ deactivate Middleware1
 MiddlewarePipeline --> RequestDispatcher
 deactivate MiddlewarePipeline
 
-alt Response already sent
+alt Response already sent (res.writableEnded || req.handled)
     RequestDispatcher --> RequestDispatcher : return
 else Continue
-    RequestDispatcher -> RouteRegistry : find(method, url)
-
     alt Route found
-        RouteRegistry --> RequestDispatcher : RouteMatch
         RequestDispatcher -> RouteHandler : handler(req, res)
         RouteHandler --> RequestDispatcher
     else Route not found
-        RouteRegistry --> RequestDispatcher : null
         RequestDispatcher --> RequestDispatcher : res.end(404)
     end
 end

@@ -23,8 +23,8 @@ class MiddlewarePipeline {
     {field} - errorMiddlewares : function[]
 
     {method} + use(middleware : function) : void
-    {method} + execute(req : Request, res : Response) : Promise<void>
-    {method} - executeError(err : Error, req : Request, res : Response) : Promise<void>
+    {method} + execute(req : Request, res : Response, next? : function) : Promise<void>
+    {method} - executeError(err : Error, req : Request, res : Response, next : function) : Promise<void>
 }
 
 class RouteRegistry {
@@ -51,6 +51,39 @@ class RouteMatch {
     {field} + params : object
 }
 
+class StaticServer {
+    {field} - router : Router
+
+    {method} + constructor(options : object)
+    {method} + listen(port : number, callback? : function) : Server
+}
+
+' --- static middleware pipeline ---
+
+class staticMiddleware {
+    {method} + static(root : string, options : object) : function
+}
+
+class resolveMiddleware {
+    {method} + resolve(root : string) : function
+}
+
+class cacheMiddleware {
+    {method} + cache(options : object) : function
+}
+
+class streamMiddleware {
+    {method} + stream() : function
+}
+
+class compressMiddleware {
+    {method} + compress(options : object) : function
+}
+
+class sendMiddleware {
+    {method} + send() : function
+}
+
 Router "1" *-- "1" RouterContext : owns
 Router "1" *-- "1" RequestDispatcher : owns
 
@@ -61,5 +94,15 @@ RouteRegistry "1" *-- "1" RouteTrie : owns
 RouteRegistry ..> RouteMatch : returns
 
 RequestDispatcher --> RouterContext : accesses
+
+StaticServer "1" *-- "1" Router : uses
+StaticServer ..> staticMiddleware : uses
+
+staticMiddleware "1" *-- "1" MiddlewarePipeline : composes
+staticMiddleware ..> resolveMiddleware : uses
+staticMiddleware ..> cacheMiddleware : uses
+staticMiddleware ..> streamMiddleware : uses
+staticMiddleware ..> compressMiddleware : uses
+staticMiddleware ..> sendMiddleware : uses
 
 @enduml

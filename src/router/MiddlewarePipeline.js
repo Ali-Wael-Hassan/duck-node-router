@@ -18,38 +18,62 @@ class MiddlewarePipeline {
         );
     }
 
-
-    async execute(req, res, next) {
+    execute(req, res, next) {
         let index = 0;
+        let inFlight = 0;
+        let settled = false;
 
-        const run = async (err) => {
-            if (err) {
-                return await this.#executeError(err, req, res, next);
-            }
+        return new Promise((resolve) => {
+            const settle = () => {
+                if (settled)
+                    return;
 
-            if (index >= this.#middlewares.length) {
-                return next?.();
-            }
+                settled = true;
+                next?.();
+                resolve();
+            };
 
-            const middleware = this.#middlewares[index++];
+            const check = () => {
+                if (inFlight === 0)
+                    settle();
+            };
 
-            await middleware(req, res, run);
-        };
+            const run = async (err) => {
+                if (err) {
+                    await this.#executeError(err, req, res, run);
+                    check();
+                    return;
+                }
 
-        try {
-            await run();
-        } catch (err) {
-            await this.#executeError(err, req, res, next);
-        }
+                if (index >= this.#middlewares.length) {
+                    check();
+                    return;
+                }
+
+                const middleware = this.#middlewares[index++];
+
+                inFlight++;
+
+                try {
+                    await middleware(req, res, run);
+                } catch (error) {
+                    await this.#executeError(error, req, res, run);
+                } finally {
+                    inFlight--;
+                    check();
+                }
+            };
+
+            run();
+        });
     }
-
 
     async #executeError(err, req, res, next) {
         let index = 0;
 
-        const runError = async (error = err) => {
-            if (index >= this.#errorMiddlewares.length) {
-                return next?.(error);
+        const runError = async (error) => {
+            if (!error || index >= this.#errorMiddlewares.length) {
+                return next?.();
             }
 
             const middleware = this.#errorMiddlewares[index++];
@@ -57,7 +81,7 @@ class MiddlewarePipeline {
             await middleware(error, req, res, runError);
         };
 
-        await runError();
+        await runError(err);
     }
 }
 

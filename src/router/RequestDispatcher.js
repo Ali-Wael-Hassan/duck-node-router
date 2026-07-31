@@ -13,7 +13,7 @@ class RequestDispatcher {
         await context.MiddlewarePipeline.execute(req, res);
 
         // Middleware already handled the request
-        if (res.writableEnded)
+        if (res.writableEnded || req.handled)
             return;
 
         if (!route) {

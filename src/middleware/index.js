@@ -5,6 +5,11 @@ const watch = require('./watch');
 const static = require('./static');
 const directory = require('./directory');
 const cors = require('./cors');
+const resolve = require('./resolve');
+const send = require('./send');
+const stream = require('./stream');
+const cache = require('./cache');
+const compress = require('./compress');
 
 module.exports = {
     bodyParser,
@@ -13,5 +18,10 @@ module.exports = {
     watch,
     static,
     directory,
-    cors
+    cors,
+    resolve,
+    send,
+    stream,
+    cache,
+    compress
 };
