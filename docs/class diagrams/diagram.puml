@@ -58,6 +58,17 @@ class StaticServer {
     {method} + listen(port : number, callback? : function) : Server
 }
 
+class LiveServer {
+    {field} - router : Router
+
+    {method} + constructor(options : object)
+    {method} + listen(port : number, callback? : function) : Server
+}
+
+class liveReloadClient {
+    {field} + liveReloadClient : string
+}
+
 ' --- static middleware pipeline ---
 
 class staticMiddleware {
@@ -84,6 +95,16 @@ class sendMiddleware {
     {method} + send() : function
 }
 
+' --- live reload middleware ---
+
+class watchMiddleware {
+    {method} + watch(directory : string) : function
+}
+
+class injectScriptMiddleware {
+    {method} + injectScript(script : string) : function
+}
+
 Router "1" *-- "1" RouterContext : owns
 Router "1" *-- "1" RequestDispatcher : owns
 
@@ -97,6 +118,14 @@ RequestDispatcher --> RouterContext : accesses
 
 StaticServer "1" *-- "1" Router : uses
 StaticServer ..> staticMiddleware : uses
+
+LiveServer "1" *-- "1" Router : uses
+LiveServer ..> staticMiddleware : uses
+LiveServer ..> watchMiddleware : uses
+LiveServer ..> injectScriptMiddleware : uses
+LiveServer ..> liveReloadClient : injects
+
+watchMiddleware ..> liveReloadClient : serves at /__live_reload
 
 staticMiddleware "1" *-- "1" MiddlewarePipeline : composes
 staticMiddleware ..> resolveMiddleware : uses

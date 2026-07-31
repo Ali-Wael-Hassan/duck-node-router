@@ -10,34 +10,29 @@ The router is intentionally focused on **routing and request orchestration**. Fe
 
 # Architecture
 
-```text
-                   StaticServer
-                        │  uses
-             ┌──────────┴──────────┐
-             ▼                     ▼
-      Built-in middleware    Application
-      (logger, cors,            │
-       directory,               ▼
-       static pipeline)       Router
-                          ┌─────┴─────┐
-                          ▼           ▼
-                 RequestDispatcher  RouterContext
-                          │           │
-                          │      ┌────┴────┐
-                          │      ▼         ▼
-                          │ RouteRegistry MiddlewarePipeline
-                          │      │
-                          │      ▼
-                          │   RouteTrie
-                          ▼
-                     Route Handler
-```
+## Router
 
-The `static` middleware is itself a composed pipeline (`resolve → cache → stream → compress → send`) built on the same `MiddlewarePipeline` used by the router.
+The router core only handles routing and request orchestration. It exposes the public API (`get`, `post`, `put`, `patch`, `delete`, `use`) and coordinates the request lifecycle through two collaborators: `RequestDispatcher` and `RouterContext`.
+
+```text
+              Router
+                │  owns
+     ┌──────────┴──────────┐
+     ▼                     ▼
+RequestDispatcher    RouterContext
+     │                     │
+     │              ┌──────┴──────┐
+     │              ▼             ▼
+     │        RouteRegistry  MiddlewarePipeline
+     │              │
+     │              ▼
+     │           RouteTrie
+     ▼
+Route Handler
+```
 
 | Component | Responsibility |
 |-----------|----------------|
-| **StaticServer** | Ready-to-use static file server built on the router + built-in middleware |
 | **Router** | Public API (`get`, `post`, `put`, `patch`, `delete`, `use`) |
 | **RouterContext** | Owns and exposes the router's internal services |
 | **RequestDispatcher** | Coordinates the complete request lifecycle |
@@ -46,6 +41,50 @@ The `static` middleware is itself a composed pipeline (`resolve → cache → st
 | **MiddlewarePipeline** | Executes middleware and error middleware |
 
 > The router core is intentionally independent of higher-level features. Request parsing, static file serving, logging, compression, HTML transformation, and live reloading are implemented as middleware, allowing them to be composed without modifying the routing engine.
+
+---
+
+## StaticServer
+
+`StaticServer` builds on the router by composing it with built-in middleware. The `static` middleware is itself a composed pipeline (`resolve → cache → stream → compress → send`) built on the same `MiddlewarePipeline` used by the router.
+
+```text
+StaticServer
+    │  uses
+    ▼
+ Router  ◄── middleware pipeline (logger → cors → directory → static)
+    │
+    └── static middleware (composed: resolve → cache → stream → compress → send)
+```
+
+| Component | Responsibility |
+|-----------|----------------|
+| **StaticServer** | Ready-to-use static file server built on the router + built-in middleware |
+| **static middleware** | Composed pipeline serving files from `root` with caching and compression |
+
+---
+
+## LiveServer
+
+`LiveServer` extends `StaticServer`'s design with development features: a `watch` middleware streams reload events over SSE (`/__live_reload`), and an `injectScript` middleware injects the `liveReloadClient` script into served HTML so the browser auto-refreshes on change.
+
+```text
+LiveServer
+    │  uses
+    ▼
+ Router  ◄── middleware pipeline (logger → cors → watch → injectScript → directory → static)
+    │
+    ├── watch middleware        ── SSE reload events at /__live_reload
+    ├── injectScript middleware ── injects liveReloadClient into HTML
+    └── static middleware       (composed: resolve → cache → stream → compress → send)
+```
+
+| Component | Responsibility |
+|-----------|----------------|
+| **LiveServer** | Development HTTP server with live reload on top of the static pipeline |
+| **watch middleware** | Watches `root` and broadcasts reload events over SSE |
+| **injectScript middleware** | Injects the `liveReloadClient` script into HTML responses |
+| **liveReloadClient** | Browser-side script that listens for reload events and refreshes the page |
 
 ---
 
@@ -197,6 +236,39 @@ server.listen(3000);
 | `cache` | `{}` | Cache / ETag / Range options passed to the `cache` middleware |
 | `compression` | `{}` | gzip / brotli options passed to the `compress` middleware |
 
+
+---
+
+# Live Server
+
+`src/server/LiveServer.js` bundles the router with static-serving middleware and live reload capabilities into a ready-to-use development HTTP server.
+
+```js
+const { LiveServer } = require('./src/server');
+
+const server = new LiveServer({
+    root: './public',
+    directoryListing: true,        // serve directory listings
+    cors: { origin: '*' },         // enable CORS (use false to disable)
+    cache: { maxAge: 3600 },       // ETag / Last-Modified / Range caching
+    compression: { gzip: true },   // gzip / brotli compression
+    liveReload: true,              // enable browser auto refresh
+    inject: true                   // inject live reload script into HTML
+});
+
+server.listen(3000);
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `root` | `'.'` | Directory to serve |
+| `directoryListing` | `true` | Generate directory listings via the `directory` middleware |
+| `cors` | `false` | CORS options, `false` disables it |
+| `cache` | `{}` | Cache / ETag / Range options passed to the `cache` middleware |
+| `compression` | `{}` | gzip / brotli options passed to the `compress` middleware |
+| `liveReload` | `true` | Enable file watching and browser reload notifications |
+| `inject` | `true` | Inject live reload client script into HTML responses |
+
 ---
 
 # Tests
@@ -291,6 +363,7 @@ node --test --test-name-pattern="MiddlewarePipeline" tests/index.js
 ### Projects Built on the Router
 
 - [x] Static file server (`StaticServer`)
+- [x] Live Server (`LiveServer`)
 
 ---
 
@@ -318,7 +391,6 @@ node --test --test-name-pattern="MiddlewarePipeline" tests/index.js
 
 ### Projects Built on the Router
 
-- [ ] Live Server
 - [ ] File Explorer Server
 - [ ] Reverse Proxy
 - [ ] MCP Server
