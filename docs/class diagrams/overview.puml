@@ -1,0 +1,44 @@
+@startuml Router Overview
+
+title High-Level Overview (no detail)
+
+' =====================================================================
+' High-level class overview. See the dedicated detailed diagram:
+'   - router.puml  (Router core, dispatcher, wrappers)
+' =====================================================================
+
+class Client
+
+class Router {
+    + get / post / put / patch / delete / use
+    + handle(req, res)
+}
+
+class RouterContext
+
+class RouteRegistry
+
+class MiddlewarePipeline
+
+class RequestDispatcher
+
+class Request
+
+class Response
+
+class RequestContext
+
+Client --> Router : HTTP request
+
+Router "1" *-- "1" RouterContext : owns
+Router "1" *-- "1" RequestDispatcher : owns
+Router ..> Request : wraps
+Router ..> Response : wraps
+
+RouterContext "1" *-- "1" RouteRegistry : owns
+RouterContext "1" *-- "1" MiddlewarePipeline : owns
+
+RequestDispatcher --> RouterContext : reads
+Request "1" o-- "1" RequestContext : holds
+
+@enduml

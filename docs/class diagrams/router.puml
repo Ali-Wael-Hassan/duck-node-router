@@ -1,5 +1,7 @@
 @startuml Router
 
+title Router Core Class Diagram (detailed)
+
 class RouterContext {
     {field} + RouteRegistry : RouteRegistry
     {field} + MiddlewarePipeline : MiddlewarePipeline
@@ -150,76 +152,6 @@ note right of Response
     req.context.stream.pipe(res) still works.
 end note
 
-class StaticServer {
-    {field} - router : Router
-
-    {method} + constructor(options : object)
-    {method} + listen(port : number, callback? : function) : Server
-}
-
-class LiveServer {
-    {field} - router : Router
-
-    {method} + constructor(options : object)
-    {method} + listen(port : number, callback? : function) : Server
-}
-
-class liveReloadClient {
-    {field} + liveReloadClient : string
-}
-
-' --- static middleware pipeline ---
-
-class staticMiddleware {
-    {method} + static(root : string, options : object) : function
-}
-
-note right of staticMiddleware
-    Composed pipeline that communicates through
-    req.context:
-    resolve -> cache -> stream -> compress -> send
-end note
-
-class resolveMiddleware {
-    {method} + resolve(root : string) : function
-
-    {field} ~ sets req.context.file { path, stat, mime }
-}
-
-class cacheMiddleware {
-    {method} + cache(options : object) : function
-
-    {field} ~ reads req.context.file, sets req.context.range
-}
-
-class streamMiddleware {
-    {method} + stream() : function
-
-    {field} ~ opens req.context.stream from req.context.file/range
-}
-
-class compressMiddleware {
-    {method} + compress(options : object) : function
-
-    {field} ~ pipes req.context.stream through gzip / brotli
-}
-
-class sendMiddleware {
-    {method} + send() : function
-
-    {field} ~ pipes req.context.stream into the response
-}
-
-' --- live reload middleware ---
-
-class watchMiddleware {
-    {method} + watch(directory : string) : function
-}
-
-class injectScriptMiddleware {
-    {method} + injectScript(script : string) : function
-}
-
 Router "1" *-- "1" RouterContext : owns
 Router "1" *-- "1" RequestDispatcher : owns
 
@@ -239,25 +171,5 @@ RequestDispatcher ..> Response : uses
 Router ..> Request : wraps
 Router ..> Response : wraps
 Request "1" o-- "1" RequestContext : holds
-
-staticMiddleware ..> RequestContext : reads / writes
-
-StaticServer "1" *-- "1" Router : uses
-StaticServer ..> staticMiddleware : uses
-
-LiveServer "1" *-- "1" Router : uses
-LiveServer ..> staticMiddleware : uses
-LiveServer ..> watchMiddleware : uses
-LiveServer ..> injectScriptMiddleware : uses
-LiveServer ..> liveReloadClient : injects
-
-watchMiddleware ..> liveReloadClient : serves at /__live_reload
-
-staticMiddleware "1" *-- "1" MiddlewarePipeline : composes
-staticMiddleware ..> resolveMiddleware : uses
-staticMiddleware ..> cacheMiddleware : uses
-staticMiddleware ..> streamMiddleware : uses
-staticMiddleware ..> compressMiddleware : uses
-staticMiddleware ..> sendMiddleware : uses
 
 @enduml
