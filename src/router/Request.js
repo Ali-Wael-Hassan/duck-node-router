@@ -20,11 +20,12 @@ class Request {
     hostname;
     ip;
     headers;
-
+    
     // Parsed data
     query = {};
     params = {};
     body = null;
+    cookies = {};
 
     // Static middleware context
     context = {

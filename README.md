@@ -110,10 +110,12 @@ src/
 │   ├── bodyParser.js
 │   ├── cache.js
 │   ├── compress.js
+│   ├── cookieParser.js
 │   ├── cors.js
 │   ├── directory.js
 │   ├── injectScript.js
 │   ├── logger.js
+│   ├── rateLimit.js
 │   ├── resolve.js
 │   ├── send.js
 │   ├── static.js
@@ -265,6 +267,37 @@ app.get('/api', mid);           // GET /api/sub/deep -> 'deep'
 
 ---
 
+# Mounting Middleware
+
+`use('/path', mw)` mounts middleware so it only runs for requests under the given prefix. The prefix is stripped from `req.url` while the middleware runs (preserving the query string) and restored before any downstream middleware or the route handler executes:
+
+```js
+const { Router } = require('./src');
+
+const app = new Router();
+
+app.use('/api', (req, res, next) => {
+    console.log('api request for', req.url);   // e.g. '/users?q=1'
+    next();
+});
+
+app.use('/api', apiRouter);                     // mount a router as middleware
+
+app.use((req, res, next) => {                   // global, runs for everything
+    next();
+});
+```
+
+| Registration | Matches | `req.url` inside middleware |
+|--------------|---------|------------------------------|
+| `use('/api', mw)` | `/api`, `/api/users`, … | `/`, `/users`, … (prefix stripped) |
+| `use('/api', errMw)` | same, error middleware | prefix stripped |
+| `use(mw)` | everything | unchanged |
+
+Error middleware (`(err, req, res, next)`) can be mounted the same way. Middleware mounted without a path defaults to `/` and matches every request. Mounted middleware can be nested: `use('/api/v1', mw)` under `use('/api', mw)` behaves like Express, since the URL is restored before the next layer runs.
+
+---
+
 # Static File Server
 
 `src/server/StaticServer.js` bundles the router with the static-serving middleware into a ready-to-use HTTP server.
@@ -330,7 +363,7 @@ server.listen(3000);
 
 # Tests
 
-76 tests covering all modules, using Node's built-in test runner (`node:test`).
+91 tests covering all modules, using Node's built-in test runner (`node:test`).
 
 ```sh
 npm test
@@ -343,11 +376,13 @@ npm test
 | **MiddlewarePipeline** | Execution order, async, next callback, error catching, arity validation |
 | **RequestDispatcher** | Dispatch flow, params attachment, 404, middleware interop, URL normalization |
 | **Router** | All HTTP methods, end-to-end requests, middleware registration, 404 |
+| **Mounted Middleware** | Path-prefix filtering, prefix stripping, URL restoration, query preservation, multiple mounts, nested router via `use()`, mounted error middleware |
 | **normalizeUrl** | Query parsing, hash removal, slash normalization, originalUrl |
 | **MIME** | Known types, unknown types, case insensitivity |
 | **bodyParser** | JSON, urlencoded, plain text, empty body, malformed JSON, stream errors |
 | **logger** | Log output on response finish |
 | **cors** | Default headers, origin restriction, OPTIONS preflight |
+| **rateLimit** | Windowed counting, max enforcement, 429 + headers, window reset, skip, custom key |
 | **injectScript** | HTML injection, non-HTML passthrough |
 | **directory** | Directory listing, index.html, non-directory fallthrough, missing dir |
 | **watch** | SSE endpoint, non-livereload passthrough, `close()` cleanup (broadcast test runs off win32) |
@@ -418,8 +453,11 @@ npm test
 - [x] Directory listing
 - [x] HTTP caching (ETag, Last-Modified, Range requests)
 - [x] Compression (gzip, brotli)
+- [x] Cookie parser
+- [x] Rate limiting
 - [x] Nested / mounted routers (`router.get(url, anotherRouter)`)
-- [x] Test suite (77 tests)
+- [x] Mounting middleware (`use('/path', mw)`) with path prefixes
+- [x] Test suite (91 tests)
 
 ### Projects Built on the Router
 
@@ -433,22 +471,13 @@ npm test
 ### Router Features
 
 - [ ] Route groups
-- [ ] Mounting middleware (`use('/path', mw)`) with path prefixes
 
 ### Additional Middleware
 
-- [ ] Cookie parser
 - [ ] Session middleware
-- [ ] Rate limiting
 
 ### Projects Built on the Router
 
 - [ ] File Explorer Server
 - [ ] Reverse Proxy
 - [ ] MCP Server
-
-### Long-Term
-
-- [ ] Plugin system
-- [ ] Performance benchmarks
-- [ ] Documentation on Medium

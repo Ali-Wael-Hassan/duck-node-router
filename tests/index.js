@@ -16,6 +16,7 @@ const MIME = require('../src/utils/MIME');
 const bodyParser = require('../src/middleware/bodyParser');
 const logger = require('../src/middleware/logger');
 const cors = require('../src/middleware/cors');
+const rateLimit = require('../src/middleware/rateLimit');
 const injectScript = require('../src/middleware/injectScript');
 const directory = require('../src/middleware/directory');
 const watch = require('../src/middleware/watch');
@@ -413,6 +414,133 @@ describe('Router', () => {
 });
 
 // ===================================================================
+// Mounted Middleware
+// ===================================================================
+
+describe('Mounted Middleware', () => {
+    it('runs mounted middleware only for the prefix and strips it from req.url', async () => {
+        const app = new Router();
+        const seen = [];
+        app.use('/api', (req, res, next) => {
+            seen.push(req.url);
+            next();
+        });
+        app.get('/api/users', (req, res) => res.end('users'));
+        app.get('/health', (req, res) => res.end('ok'));
+
+        const { res: users } = await handle(app, '/api/users');
+        assert.strictEqual(users.body, 'users');
+        assert.deepStrictEqual(seen, ['/users']);
+
+        const { res: health } = await handle(app, '/health');
+        assert.strictEqual(health.body, 'ok');
+        assert.deepStrictEqual(seen, ['/users']);
+    });
+
+    it('matches the bare mount path', async () => {
+        const app = new Router();
+        app.use('/api', (req, res, next) => {
+            req.mounted = true;
+            next();
+        });
+        app.get('/api', (req, res) => res.end('' + req.mounted));
+
+        const { res } = await handle(app, '/api');
+        assert.strictEqual(res.body, 'true');
+    });
+
+    it('restores req.url before downstream middleware runs', async () => {
+        const app = new Router();
+        app.use('/api', (req, res, next) => {
+            assert.strictEqual(req.url, '/users');
+            next();
+        });
+        app.use((req, res, next) => {
+            assert.strictEqual(req.url, '/api/users');
+            next();
+        });
+        app.get('/api/users', (req, res) => res.end('ok'));
+
+        const { res } = await handle(app, '/api/users');
+        assert.strictEqual(res.body, 'ok');
+    });
+
+    it('preserves the query string across the mount', async () => {
+        const app = new Router();
+        app.use('/api', (req, res) => {
+            res.end(JSON.stringify({ url: req.url, query: req.query }));
+        });
+
+        const { res } = await handle(app, '/api/users?q=1');
+        assert.deepStrictEqual(JSON.parse(res.body), { url: '/users?q=1', query: { q: '1' } });
+    });
+
+    it('supports multiple middleware mounted at different prefixes', async () => {
+        const app = new Router();
+        const order = [];
+        app.use('/a', (req, res, next) => { order.push('a:' + req.url); next(); });
+        app.use('/b', (req, res, next) => { order.push('b:' + req.url); next(); });
+        app.get('/a/x', (req, res) => res.end('ax'));
+        app.get('/b/y', (req, res) => res.end('by'));
+
+        const ax = await handle(app, '/a/x');
+        assert.strictEqual(ax.res.body, 'ax');
+        assert.deepStrictEqual(order, ['a:/x']);
+
+        order.length = 0;
+        const by = await handle(app, '/b/y');
+        assert.strictEqual(by.res.body, 'by');
+        assert.deepStrictEqual(order, ['b:/y']);
+    });
+
+    it('mounts at / by default and still matches everything', async () => {
+        const app = new Router();
+        app.use('/api', (req, res, next) => { req.fromApi = true; next(); });
+        app.use((req, res, next) => { req.global = true; next(); });
+        app.get('/api/users', (req, res) => res.end(`${req.global}-${req.fromApi}`));
+
+        const { res } = await handle(app, '/api/users');
+        assert.strictEqual(res.body, 'true-true');
+    });
+
+    it('mounts a nested router via use(path, router)', async () => {
+        const api = new Router();
+        api.use((req, res, next) => { req.nested = 1; next(); });
+        api.get('/users', (req, res) => res.end('users:' + req.nested));
+
+        const app = new Router();
+        app.use('/api', api);
+        app.get('/health', (req, res) => res.end('ok'));
+
+        const users = await handle(app, '/api/users');
+        assert.strictEqual(users.res.body, 'users:1');
+
+        const health = await handle(app, '/health');
+        assert.strictEqual(health.res.body, 'ok');
+    });
+
+    it('mounts error middleware on a path', async () => {
+        const app = new Router();
+        app.use('/api', () => { throw new Error('api boom'); });
+        app.use('/api', (err, req, res, next) => {
+            res.status(500).end('handled:' + err.message);
+        });
+        app.get('/api/x', (req, res) => res.end('ok'));
+
+        const { res } = await handle(app, '/api/x');
+        assert.strictEqual(res.statusCode, 500);
+        assert.strictEqual(res.body, 'handled:api boom');
+    });
+});
+
+async function handle(app, url, method = 'GET') {
+    const req = mockReq({ url, method });
+    const res = mockRes();
+    await app.handle(req, res);
+    return { req, res };
+}
+
+// ===================================================================
 // normalizeUrl
 // ===================================================================
 
@@ -641,6 +769,100 @@ describe('cors', () => {
         mw(req, res, () => {});
         assert.strictEqual(res.statusCode, 204);
         assert.strictEqual(res.writableEnded, true);
+    });
+});
+
+// ===================================================================
+// Middleware: rateLimit
+// ===================================================================
+
+describe('rateLimit', () => {
+    it('allows requests up to max and calls next', async () => {
+        const mw = rateLimit({ max: 2, keyGenerator: () => 'k' });
+        const req = mockReq();
+        const res = mockRes();
+        let calls = 0;
+
+        for (let i = 0; i < 2; i++) {
+            await new Promise(resolve => mw(req, res, () => { calls++; resolve(); }));
+        }
+
+        assert.strictEqual(calls, 2);
+        assert.strictEqual(res.writableEnded, false);
+    });
+
+    it('rejects with 429 after exceeding max', async () => {
+        const mw = rateLimit({ max: 1, keyGenerator: () => 'k' });
+        const req = mockReq();
+
+        const ok = mockRes();
+        await new Promise(resolve => mw(req, ok, resolve));
+        assert.strictEqual(ok.writableEnded, false);
+
+        const limited = mockRes();
+        await new Promise(resolve => mw(req, limited, resolve));
+        assert.strictEqual(limited.statusCode, 429);
+        assert.strictEqual(limited.body, JSON.stringify({ error: 'Too Many Requests' }));
+    });
+
+    it('sets rate limit headers', async () => {
+        const mw = rateLimit({ max: 10, keyGenerator: () => 'k' });
+        const req = mockReq();
+
+        const first = mockRes();
+        await new Promise(resolve => mw(req, first, resolve));
+        assert.strictEqual(first.get('RateLimit-Limit'), '10');
+        assert.strictEqual(first.get('RateLimit-Remaining'), '9');
+
+        const second = mockRes();
+        await new Promise(resolve => mw(req, second, resolve));
+        assert.strictEqual(second.get('RateLimit-Remaining'), '8');
+    });
+
+    it('resets the window after windowMs elapses', async () => {
+        const mw = rateLimit({ windowMs: 10, max: 1, keyGenerator: () => 'k' });
+        const req = mockReq();
+
+        await new Promise(resolve => mw(req, mockRes(), resolve));
+
+        const limited = mockRes();
+        await new Promise(resolve => mw(req, limited, resolve));
+        assert.strictEqual(limited.statusCode, 429);
+
+        await new Promise(r => setTimeout(r, 20));
+
+        const after = mockRes();
+        await new Promise(resolve => mw(req, after, resolve));
+        assert.strictEqual(after.writableEnded, false);
+        assert.strictEqual(after.get('RateLimit-Remaining'), '0');
+    });
+
+    it('supports skip', async () => {
+        const mw = rateLimit({ max: 1, keyGenerator: () => 'k', skip: req => req.skip });
+        const res = mockRes();
+        const skipped = mockReq();
+        skipped.skip = true;
+
+        await new Promise(resolve => mw(skipped, res, resolve));
+        await new Promise(resolve => mw(skipped, mockRes(), resolve));
+
+        assert.strictEqual(res.writableEnded, false);
+    });
+
+    it('supports a custom keyGenerator', async () => {
+        const mw = rateLimit({ max: 1, keyGenerator: req => req.get('x-key') });
+        const a = mockReq({ headers: { 'x-key': 'a' } });
+        const b = mockReq({ headers: { 'x-key': 'b' } });
+
+        await new Promise(resolve => mw(a, mockRes(), resolve));
+
+        const limited = mockRes();
+        await new Promise(resolve => mw(a, limited, resolve));
+        assert.strictEqual(limited.statusCode, 429);
+
+        const other = mockRes();
+        await new Promise(resolve => mw(b, other, resolve));
+        assert.strictEqual(other.writableEnded, false);
     });
 });
 

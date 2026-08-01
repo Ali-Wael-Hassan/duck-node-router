@@ -13,6 +13,70 @@ function normalizeMountPath(path) {
     return mount;
 }
 
+function mountMatches(mount, url) {
+    if (mount === '/') return true;
+    if (url === mount) return true;
+    return url.startsWith(mount + '/');
+}
+
+function applyMount(req, mount) {
+    if (mount === '/') return () => {};
+
+    const url = req.url;
+    const originalUrlField = req.originalUrl;
+    const originalQuery = req.query;
+
+    let remainder = url;
+    if (remainder === mount) remainder = '/';
+    else remainder = remainder.slice(mount.length);
+
+    const queryIndex = originalUrlField ? originalUrlField.indexOf('?') : -1;
+    const suffix = queryIndex === -1 ? '' : originalUrlField.slice(queryIndex);
+    req.url = remainder + suffix;
+
+    return () => {
+        req.url = url;
+        req.originalUrl = originalUrlField;
+        req.query = originalQuery;
+    };
+}
+
+function wrapMount(middleware, mount) {
+    if (middleware.length === 4) {
+        return async (err, req, res, next) => {
+            if (!mountMatches(mount, req.url)) return next(err);
+
+            const restore = applyMount(req, mount);
+            const mountedNext = (e) => {
+                restore();
+                next(e);
+            };
+
+            try {
+                await middleware(err, req, res, mountedNext);
+            } finally {
+                restore();
+            }
+        };
+    }
+
+    return async (req, res, next) => {
+        if (!mountMatches(mount, req.url)) return next();
+
+        const restore = applyMount(req, mount);
+        const mountedNext = (e) => {
+            restore();
+            next(e);
+        };
+
+        try {
+            await middleware(req, res, mountedNext);
+        } finally {
+            restore();
+        }
+    };
+}
+
 async function mountRouter(nested, mount, req, res) {
     const originalUrl = req.url;
     const originalUrlField = req.originalUrl;
@@ -106,8 +170,15 @@ class Router {
         this.#context.RouteRegistry.register(method, path, handler);
     }
 
-    use(middleware) {
-        this.#context.MiddlewarePipeline.use(middleware);
+    use(path, middleware) {
+        if (typeof path === 'function') {
+            middleware = path;
+            path = "/";
+        }
+
+        const mount = normalizeMountPath(path);
+
+        this.#context.MiddlewarePipeline.use(wrapMount(middleware, mount));
     }
 
     async handle(req, res) {

@@ -10,6 +10,8 @@ const send = require('./send');
 const stream = require('./stream');
 const cache = require('./cache');
 const compress = require('./compress');
+const cookieParser = require('./cookieParser');
+const rateLimit = require('./rateLimit');
 
 module.exports = {
     bodyParser,
@@ -23,5 +25,7 @@ module.exports = {
     send,
     stream,
     cache,
-    compress
+    compress,
+    cookieParser,
+    rateLimit
 };
