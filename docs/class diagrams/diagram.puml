@@ -16,7 +16,24 @@ class Router {
     {method} + delete(path : string, handler : function) : void
     {method} + use(middleware : function) : void
     {method} + handle(req : Request, res : Response) : Promise<void>
+    {method} - register(method : string, path : string, handler : function) : void
 }
+
+note right of Router
+    Returns a callable async function (req, res, next)
+    that carries the bound public API and a Router symbol.
+    When registered as a handler on another router it is
+    mounted automatically (nested routers).
+end note
+
+class mountRouter {
+    {method} + mountRouter(nested : Router, mount : string, req : Request, res : Response) : Promise<void>
+}
+
+note right of mountRouter
+    Strips the mount prefix from req.url, dispatches into the
+    nested router, then restores req.url/req.query and merges params.
+end note
 
 class MiddlewarePipeline {
     {field} - middlewares : function[]
@@ -107,6 +124,9 @@ class injectScriptMiddleware {
 
 Router "1" *-- "1" RouterContext : owns
 Router "1" *-- "1" RequestDispatcher : owns
+
+Router ..> mountRouter : uses (nested routers)
+Router "1" *-- "0..*" Router : mounts
 
 RouterContext "1" *-- "1" RouteRegistry : owns
 RouterContext "1" *-- "1" MiddlewarePipeline : owns

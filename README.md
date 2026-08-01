@@ -33,12 +33,14 @@ Route Handler
 
 | Component | Responsibility |
 |-----------|----------------|
-| **Router** | Public API (`get`, `post`, `put`, `patch`, `delete`, `use`) |
+| **Router** | Public API (`get`, `post`, `put`, `patch`, `delete`, `use`); returns a callable function that can itself be mounted as a nested router |
 | **RouterContext** | Owns and exposes the router's internal services |
 | **RequestDispatcher** | Coordinates the complete request lifecycle |
 | **RouteRegistry** | Route registration, validation, and lookup |
 | **RouteTrie** | Efficient route storage and matching |
 | **MiddlewarePipeline** | Executes middleware and error middleware |
+
+> A `Router` is a callable function (`async (req, res, next) => …`) that carries the bound route/middleware methods. Because of this, a router can be registered as a handler on another router (`app.get('/api', apiRouter)`) to create nested/mounted routers. See [Nested Routers](#nested-routers).
 
 > The router core is intentionally independent of higher-level features. Request parsing, static file serving, logging, compression, HTML transformation, and live reloading are implemented as middleware, allowing them to be composed without modifying the routing engine.
 
@@ -119,6 +121,8 @@ src/
 │
 ├── server/
 │   ├── StaticServer.js
+│   ├── LiveServer.js
+│   ├── liveReloadClient.js
 │   └── index.js
 │
 ├── utils/
@@ -130,11 +134,17 @@ src/
 
 tests/
 │
-└── index.js
+├── index.js
+└── nestedRoutes.js
 
 examples/
 │
 └── index.js
+
+docs/
+│
+├── class diagrams/
+└── sequence diagrams/
 
 package.json
 ```
@@ -210,6 +220,49 @@ server.listen(PORT, () => {
 
 ---
 
+# Nested Routers
+
+A `Router` is a callable function, so it can be registered as a handler on another router to create nested (mounted) routers:
+
+```js
+const { Router } = require('./src');
+
+const users = new Router();
+
+users.get('/', (req, res) => res.end('User list'));
+users.get('/:id', (req, res) => res.end(`User ${req.params.id}`));
+
+const app = new Router();
+
+app.get('/users', users);       // mount at /users
+app.get('/health', (req, res) => res.end('ok'));
+```
+
+| Request | Handler |
+|---------|---------|
+| `GET /users` | nested `users` router root |
+| `GET /users/42` | nested `users` router `/:id` (params extracted) |
+| `GET /health` | parent `app` handler |
+
+Mounting a nested router at `/users` registers both `/users` and `/users/*`, so every path under the mount prefix is forwarded to the nested router after the prefix is stripped. Queries are preserved (`req.query`), middleware runs on both sides, and params from the parent and nested routers are merged onto `req.params`. Precedence is still applied across the whole tree, so a static parent route like `/users/me` wins over a nested `/:id`.
+
+Routers can be nested arbitrarily deep:
+
+```js
+const inner = new Router();
+inner.get('/deep', (req, res) => res.end('deep'));
+
+const mid = new Router();
+mid.get('/sub', inner);
+
+const app = new Router();
+app.get('/api', mid);           // GET /api/sub/deep -> 'deep'
+```
+
+> Nesting is detected via a symbol tag set on every router (`ROUTER_SYMBOL`), so any function or object registered as a handler that is a router gets mounted automatically. See [`src/router/Router.js`](src/router/Router.js).
+
+---
+
 # Static File Server
 
 `src/server/StaticServer.js` bundles the router with the static-serving middleware into a ready-to-use HTTP server.
@@ -273,7 +326,7 @@ server.listen(3000);
 
 # Tests
 
-63 tests covering all modules, using Node's built-in test runner (`node:test`).
+76 tests covering all modules, using Node's built-in test runner (`node:test`).
 
 ```sh
 npm test
@@ -295,6 +348,7 @@ npm test
 | **directory** | Directory listing, index.html, non-directory fallthrough, missing dir |
 | **watch** | SSE endpoint, non-livereload passthrough |
 | **Integration** | Full HTTP server with GET, 404, body parsing, CORS |
+| **Nested Routes** | Prefix stripping, nested params, query forwarding, nested middleware, all HTTP methods, nested + normal route interop, deep nesting, precedence |
 
 > See [Known Issues](#known-issues) — the `watch` middleware leaks an `fs.watch` handle, which can prevent `npm test` from exiting.
 
@@ -358,7 +412,8 @@ node --test --test-name-pattern="MiddlewarePipeline" tests/index.js
 - [x] Directory listing
 - [x] HTTP caching (ETag, Last-Modified, Range requests)
 - [x] Compression (gzip, brotli)
-- [x] Test suite (63 tests)
+- [x] Nested / mounted routers (`router.get(url, anotherRouter)`)
+- [x] Test suite (76 tests)
 
 ### Projects Built on the Router
 
@@ -380,8 +435,7 @@ node --test --test-name-pattern="MiddlewarePipeline" tests/index.js
 ### Router Features
 
 - [ ] Route groups
-- [ ] Nested routers
-- [ ] Router mounting
+- [ ] Mounting middleware (`use('/path', mw)`) with path prefixes
 
 ### Additional Middleware
 

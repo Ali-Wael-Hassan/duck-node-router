@@ -39,6 +39,9 @@ else Continue
         RequestDispatcher --> Client : 404 Not Found
     else Route found
         RequestDispatcher -> RouteHandler : handler(req, res)
+        alt handler is a Router (nested mount)
+            RouteHandler -> RouteHandler : mountRouter\nstrip mount prefix, dispatch nested, restore url/query/params
+        end
         RouteHandler --> Client : Response
     end
 end

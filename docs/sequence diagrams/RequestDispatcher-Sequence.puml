@@ -49,6 +49,9 @@ alt Response already sent (res.writableEnded || req.handled)
 else Continue
     alt Route found
         RequestDispatcher -> RouteHandler : handler(req, res)
+        alt handler is a Router (nested mount)
+            RouteHandler -> RouteHandler : mountRouter : strip prefix,\ndispatch nested router,\nmerge params, restore url/query
+        end
         RouteHandler --> RequestDispatcher
     else Route not found
         RequestDispatcher --> RequestDispatcher : res.end(404)
