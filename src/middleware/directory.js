@@ -120,11 +120,10 @@ ${body}
 </body>
 </html>`;
 
-            res.writeHead(200, {
-                "Content-Type": "text/html; charset=utf-8"
-            });
-
-            res.end(html);
+            res
+                .status(200)
+                .set("Content-Type", "text/html; charset=utf-8")
+                .end(html);
         } catch {
             next();
         }

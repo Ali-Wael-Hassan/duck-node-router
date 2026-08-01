@@ -19,21 +19,21 @@ const cors = (options = {}) => {
         : null;
 
     return (req, res, next) => {
-        const requestOrigin = req.headers.origin;
+        const requestOrigin = req.get("origin");
 
         if (allowAll) {
-            res.setHeader("Access-Control-Allow-Origin", "*");
+            res.set("Access-Control-Allow-Origin", "*");
         } else if (typeof origin === "string") {
-            res.setHeader("Access-Control-Allow-Origin", origin);
+            res.set("Access-Control-Allow-Origin", origin);
         } else if (allowedOrigins.has(requestOrigin)) {
-            res.setHeader("Access-Control-Allow-Origin", requestOrigin);
+            res.set("Access-Control-Allow-Origin", requestOrigin);
         }
 
-        res.setHeader("Access-Control-Allow-Methods", methods);
-        res.setHeader("Access-Control-Allow-Headers", headers);
+        res.set("Access-Control-Allow-Methods", methods);
+        res.set("Access-Control-Allow-Headers", headers);
 
         if (req.method === "OPTIONS") {
-            res.writeHead(204);
+            res.status(204);
             return res.end();
         }
 

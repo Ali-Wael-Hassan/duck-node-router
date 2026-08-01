@@ -10,6 +10,7 @@ const RouteRegistry = require('../src/router/RouteRegistry');
 const MiddlewarePipeline = require('../src/router/MiddlewarePipeline');
 const RequestDispatcher = require('../src/router/RequestDispatcher');
 const Router = require('../src/router');
+const { Request, Response } = Router;
 const normalizeUrl = require('../src/utils/normalizeUrl');
 const MIME = require('../src/utils/MIME');
 const bodyParser = require('../src/middleware/bodyParser');
@@ -24,28 +25,30 @@ const watch = require('../src/middleware/watch');
 // ---------------------------------------------------------------------------
 
 function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
-    const req = new EventEmitter();
-    req.method = method;
-    req.url = url;
-    req.headers = headers;
-    req.on = req.on.bind(req);
-    return req;
+    const raw = new EventEmitter();
+    raw.method = method;
+    raw.url = url;
+    raw.headers = headers;
+    return new Request(raw);
 }
 
 function mockRes() {
-    const res = new EventEmitter();
-    res.statusCode = 200;
-    res.headers = {};
-    res.writableEnded = false;
-    res.setHeader = (k, v) => { res.headers[k] = v; };
-    res.getHeader = (k) => res.headers[k];
-    res.writeHead = function (code, h) { res.statusCode = code; if (h) Object.assign(res.headers, h); };
-    res.end = function (data) {
-        res.writableEnded = true;
-        res.body = data;
-        res.emit('finish');
+    const raw = new EventEmitter();
+    raw.statusCode = 200;
+    raw.headers = {};
+    raw.writableEnded = false;
+    raw.writable = true;
+    raw.setHeader = (k, v) => { raw.headers[k] = v; };
+    raw.getHeader = (k) => raw.headers[k];
+    raw.hasHeader = (k) => k in raw.headers;
+    raw.removeHeader = (k) => { delete raw.headers[k]; };
+    raw.writeHead = function (code, h) { raw.statusCode = code; if (h) Object.assign(raw.headers, h); };
+    raw.end = function (data) {
+        raw.writableEnded = true;
+        raw.body = data;
+        raw.emit('finish');
     };
-    return res;
+    return new Response(raw);
 }
 
 function mockContext() {
@@ -612,8 +615,8 @@ describe('cors', () => {
         const res = mockRes();
 
         mw(req, res, () => {});
-        assert.strictEqual(res.headers['Access-Control-Allow-Origin'], '*');
-        assert.ok(res.headers['Access-Control-Allow-Methods']);
+        assert.strictEqual(res.get('Access-Control-Allow-Origin'), '*');
+        assert.ok(res.get('Access-Control-Allow-Methods'));
     });
 
     it('restricts to specific origin', () => {
@@ -622,7 +625,7 @@ describe('cors', () => {
         const res = mockRes();
 
         mw(req, res, () => {});
-        assert.strictEqual(res.headers['Access-Control-Allow-Origin'], 'http://app.com');
+        assert.strictEqual(res.get('Access-Control-Allow-Origin'), 'http://app.com');
     });
 
     it('handles preflight OPTIONS request', () => {
@@ -645,7 +648,7 @@ describe('injectScript', () => {
         const mw = injectScript('alert("hi")');
         const req = mockReq();
         const res = mockRes();
-        res.headers['Content-Type'] = 'text/html';
+        res.set('Content-Type', 'text/html');
 
         mw(req, res, () => {
             res.end('<html><body></body></html>');
@@ -658,7 +661,7 @@ describe('injectScript', () => {
         const mw = injectScript('alert(1)');
         const req = mockReq();
         const res = mockRes();
-        res.headers['Content-Type'] = 'application/json';
+        res.set('Content-Type', 'application/json');
 
         mw(req, res, () => {
             res.end('{"ok":true}');
@@ -687,7 +690,7 @@ describe('directory', () => {
         assert.ok(res.body.includes('Index of'));
         assert.ok(res.body.includes('a.txt'));
         assert.ok(res.body.includes('sub'));
-        assert.strictEqual(res.headers['Content-Type'], 'text/html; charset=utf-8');
+        assert.strictEqual(res.get('Content-Type'), 'text/html; charset=utf-8');
 
         fs.rmSync(dir, { recursive: true, force: true });
     });
@@ -760,7 +763,7 @@ describe('watch', () => {
         const res = mockRes();
 
         await mw(req, res, () => {});
-        assert.strictEqual(res.headers['Content-Type'], 'text/event-stream');
+        assert.strictEqual(res.get('Content-Type'), 'text/event-stream');
         assert.strictEqual(res.writableEnded, false);
 
         fs.rmSync(dir, { recursive: true, force: true });

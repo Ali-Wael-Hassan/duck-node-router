@@ -3,7 +3,7 @@ const injectScript = (script) => {
         const end = res.end;
 
         res.end = function (data, encoding, callback) {
-            const type = res.getHeader("Content-Type");
+            const type = res.get("Content-Type");
 
             if (typeof data === 'string' && type?.startsWith("text/html")) {
                 data = data.replace('</body>', `<script>${script}</script></body>`);

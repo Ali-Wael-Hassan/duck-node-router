@@ -1,5 +1,7 @@
 const RouterContext = require("./RouterContext");
 const RequestDispatcher = require("./RequestDispatcher");
+const Request = require("./Request");
+const Response = require("./Response");
 
 const ROUTER_SYMBOL = Symbol('Router');
 
@@ -109,6 +111,12 @@ class Router {
     }
 
     async handle(req, res) {
+        if (!(req instanceof Request))
+            req = new Request(req);
+
+        if (!(res instanceof Response))
+            res = new Response(res);
+
         await this.#dispatcher.dispatch(req, res, this.#context);
     }
 }

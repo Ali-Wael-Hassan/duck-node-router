@@ -18,7 +18,7 @@ const resolve = (root) => {
             if (!stat.isFile())
                 return next();
 
-            req.file = {
+            req.context.file = {
                 path: filePath,
                 stat,
                 mime: MIME.getType(filePath)

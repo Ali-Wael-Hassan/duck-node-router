@@ -24,6 +24,9 @@ note right of Router
     that carries the bound public API and a Router symbol.
     When registered as a handler on another router it is
     mounted automatically (nested routers).
+
+    handle() wraps raw Node req/res into Request/Response
+    (skipping re-wrap when already wrapped by a parent router).
 end note
 
 class mountRouter {
@@ -68,6 +71,85 @@ class RouteMatch {
     {field} + params : object
 }
 
+class Request {
+    {field} + raw : IncomingMessage
+
+    {field} + method : string
+    {field} + url : string
+    {field} + path : string
+    {field} + originalUrl : string
+    {field} + protocol : string
+    {field} + hostname : string
+    {field} + ip : string
+    {field} + headers : object
+
+    {field} + query : object
+    {field} + params : object
+    {field} + body : any
+
+    {field} + context : RequestContext
+    {field} + locals : object
+
+    {method} + get(name : string) : string
+    {method} + header(name : string) : string
+    {method} + accepts(type : string) : string | boolean
+    {method} + is(type : string) : boolean
+    {method} + param(name : string) : any
+    {method} + secure() : boolean
+    {method} + xhr() : boolean
+    {method} + on(event : string, listener : function) : Request
+    {method} + once(event : string, listener : function) : Request
+    {method} + emit(event : string, ...args) : boolean
+}
+
+class RequestContext {
+    {field} + file : object
+    {field} + stream : ReadStream
+    {field} + range : object
+}
+
+note right of Request
+    Wraps the raw http.IncomingMessage.
+    The static pipeline communicates
+    through req.context (file / stream / range)
+    instead of attaching fields to req directly.
+end note
+
+class Response {
+    {field} + raw : ServerResponse
+    {field} + body : any
+    {field} + locals : object
+    {field} + statusCode : number
+
+    {method} + status(code : number) : Response
+    {method} + set(name : string | object, value? : any) : Response
+    {method} + get(name : string) : any
+    {method} + has(name : string) : boolean
+    {method} + remove(name : string) : Response
+    {method} + type(type : string) : Response
+    {method} + send(body : any) : Response
+    {method} + json(obj : object) : Response
+    {method} + html(html : string) : Response
+    {method} + redirect(url : string, status? : number) : Response
+    {method} + download(path : string) : Response
+    {method} + sendFile(path : string) : Response
+    {method} + attachment(filename : string) : Response
+    {method} + cookie(name : string, value : any, options? : object) : Response
+    {method} + clearCookie(name : string) : Response
+    {method} + end(data? : any, encoding? : string, callback? : function) : Response
+    {method} + write(chunk : any, encoding? : string, callback? : function) : boolean
+    {method} + writeHead(statusCode : number, statusMessage? : string, headers? : object) : ServerResponse
+    {method} + on/once/emit/removeListener/destroy : passthrough
+}
+
+note right of Response
+    Wraps the raw http.ServerResponse.
+    Low-level Node methods (write, end,
+    writeHead, events, stream state) are
+    delegated to the raw response so
+    req.context.stream.pipe(res) still works.
+end note
+
 class StaticServer {
     {field} - router : Router
 
@@ -92,24 +174,40 @@ class staticMiddleware {
     {method} + static(root : string, options : object) : function
 }
 
+note right of staticMiddleware
+    Composed pipeline that communicates through
+    req.context:
+    resolve -> cache -> stream -> compress -> send
+end note
+
 class resolveMiddleware {
     {method} + resolve(root : string) : function
+
+    {field} ~ sets req.context.file { path, stat, mime }
 }
 
 class cacheMiddleware {
     {method} + cache(options : object) : function
+
+    {field} ~ reads req.context.file, sets req.context.range
 }
 
 class streamMiddleware {
     {method} + stream() : function
+
+    {field} ~ opens req.context.stream from req.context.file/range
 }
 
 class compressMiddleware {
     {method} + compress(options : object) : function
+
+    {field} ~ pipes req.context.stream through gzip / brotli
 }
 
 class sendMiddleware {
     {method} + send() : function
+
+    {field} ~ pipes req.context.stream into the response
 }
 
 ' --- live reload middleware ---
@@ -135,6 +233,14 @@ RouteRegistry "1" *-- "1" RouteTrie : owns
 RouteRegistry ..> RouteMatch : returns
 
 RequestDispatcher --> RouterContext : accesses
+RequestDispatcher ..> Request : uses
+RequestDispatcher ..> Response : uses
+
+Router ..> Request : wraps
+Router ..> Response : wraps
+Request "1" o-- "1" RequestContext : holds
+
+staticMiddleware ..> RequestContext : reads / writes
 
 StaticServer "1" *-- "1" Router : uses
 StaticServer ..> staticMiddleware : uses

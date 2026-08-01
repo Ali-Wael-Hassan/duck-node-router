@@ -2,31 +2,35 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert');
 
 const Router = require('../src/router');
+const { Request, Response } = Router;
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
 function mockReq({ method = 'GET', url = '/', headers = {} } = {}) {
-    const req = {};
-    req.method = method;
-    req.url = url;
-    req.headers = headers;
-    req.query = {};
-    return req;
+    const raw = {};
+    raw.method = method;
+    raw.url = url;
+    raw.headers = headers;
+    return new Request(raw);
 }
 
 function mockRes() {
-    return {
+    return new Response({
         statusCode: 200,
         headers: {},
         writableEnded: false,
+        writable: true,
         setHeader(k, v) { this.headers[k] = v; },
+        getHeader(k) { return this.headers[k]; },
+        hasHeader(k) { return k in this.headers; },
+        removeHeader(k) { delete this.headers[k]; },
         end(data) {
             this.writableEnded = true;
             this.body = data;
         }
-    };
+    });
 }
 
 async function get(app, url, method = 'GET') {

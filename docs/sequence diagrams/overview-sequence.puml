@@ -9,7 +9,9 @@ participant MiddlewarePipeline
 participant RouteRegistry
 participant RouteHandler
 
-Client -> Router : handle(req, res)
+Client -> Router : handle(rawReq, rawRes)
+
+Router -> Router : wrap raw Node req/res\nnew Request(rawReq)\nnew Response(rawRes)
 
 Router -> RequestDispatcher : dispatch(req, res, context)
 

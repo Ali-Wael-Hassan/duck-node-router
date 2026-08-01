@@ -54,7 +54,7 @@ else Continue
         end
         RouteHandler --> RequestDispatcher
     else Route not found
-        RequestDispatcher --> RequestDispatcher : res.end(404)
+        RequestDispatcher --> RequestDispatcher : res.status(404).send('Not Found')
     end
 end
 

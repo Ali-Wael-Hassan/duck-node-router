@@ -5,12 +5,12 @@ const cache = ({
     etag = true,
     lastModified = true
 } = {}) => (req, res, next) => {
-    if (!req.file)
+    if (!req.context.file)
         return next();
 
-    const { stat } = req.file;
+    const { stat } = req.context.file;
 
-    res.setHeader(
+    res.set(
         'Cache-Control',
         `public, max-age=${maxAge}`
     );
@@ -19,10 +19,10 @@ const cache = ({
     if (lastModified) {
         const modified = stat.mtime.toUTCString();
 
-        res.setHeader('Last-Modified', modified);
+        res.set('Last-Modified', modified);
 
-        if (req.headers['if-modified-since'] === modified) {
-            res.statusCode = 304;
+        if (req.get('if-modified-since') === modified) {
+            res.status(304);
             return res.end();
         }
     }
@@ -33,23 +33,23 @@ const cache = ({
             .update(`${stat.size}:${stat.mtimeMs}`)
             .digest('hex');
 
-        res.setHeader('ETag', tag);
+        res.set('ETag', tag);
 
-        if (req.headers['if-none-match'] === tag) {
-            res.statusCode = 304;
+        if (req.get('if-none-match') === tag) {
+            res.status(304);
             return res.end();
         }
     }
     
-    res.setHeader('Accept-Ranges', 'bytes');
+    res.set('Accept-Ranges', 'bytes');
 
-    const header = req.headers.range;
+    const header = req.get('range');
 
     if (header) {
         const match = /^bytes=(\d*)-(\d*)$/.exec(header);
 
         if (!match) {
-            res.statusCode = 416;
+            res.status(416);
             return res.end();
         }
 
@@ -59,20 +59,20 @@ const cache = ({
         let end = match[2] === '' ? size - 1 : Number(match[2]);
 
         if (Number.isNaN(start) || Number.isNaN(end) || start > end || end >= size) {
-            res.statusCode = 416;
+            res.status(416);
             return res.end();
         }
 
-        req.range = { start, end };
+        req.context.range = { start, end };
 
-        res.statusCode = 206;
+        res.status(206);
 
-        res.setHeader(
+        res.set(
             'Content-Range',
             `bytes ${start}-${end}/${size}`
         );
 
-        res.setHeader(
+        res.set(
             'Content-Length',
             end - start + 1
         );

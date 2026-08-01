@@ -64,6 +64,8 @@ StaticServer
 | **StaticServer** | Ready-to-use static file server built on the router + built-in middleware |
 | **static middleware** | Composed pipeline serving files from `root` with caching and compression |
 
+The static pipeline communicates through `req.context` (never by mutating `req` directly): `resolve` sets `req.context.file` (`{ path, stat, mime }`), `cache` computes `req.context.range` for `Range` requests, `stream` opens `req.context.stream`, and `send` pipes it to the response.
+
 ---
 
 ## LiveServer
@@ -377,6 +379,12 @@ node --test --test-name-pattern="MiddlewarePipeline" tests/index.js
 - [x] Middleware Pipeline
 - [x] Separation of API, orchestration, routing logic, and storage
 
+### Request / Response Wrappers
+
+- [x] `Request` wrapper around `http.IncomingMessage` (`req.get`, `req.params`, `req.query`, `req.body`, `req.accepts`, `req.is`, `req.param`, `req.xhr`, `req.context.file` / `req.context.stream` / `req.context.range`, …)
+- [x] `Response` wrapper around `http.ServerResponse` (`res.status`, `res.set`, `res.send`, `res.json`, `res.html`, `res.redirect`, `res.download`, `res.sendFile`, cookies, …)
+- [x] Router, dispatcher, middleware pipeline, and every built-in middleware now operate on the wrappers instead of raw Node objects
+
 ### Routing Engine
 
 - [x] Character-based Route Trie
@@ -424,8 +432,6 @@ node --test --test-name-pattern="MiddlewarePipeline" tests/index.js
 
 ## 🚧 In Progress
 
-- [ ] Request wrapper
-- [ ] Response wrapper
 - [ ] Fix `watch` middleware `fs.watch` handle leak (see [Known Issues](#known-issues))
 
 ---

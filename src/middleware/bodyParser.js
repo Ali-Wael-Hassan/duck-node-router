@@ -19,7 +19,7 @@ const bodyParser = () => {
             return next();
         }
 
-        const contentType = (req.headers["content-type"] ?? "").split(";")[0];
+        const contentType = (req.get("content-type") ?? "").split(";")[0];
 
         try {
             switch (contentType) {

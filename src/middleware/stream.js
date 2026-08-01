@@ -1,16 +1,16 @@
 const fs = require('fs');
 
 const stream = () => (req, res, next) => {
-    if (!req.file)
+    if (!req.context.file)
         return next();
 
-    if (!req.stream) {
-        req.stream = fs.createReadStream(
-            req.file.path,
-            req.range
+    if (!req.context.stream) {
+        req.context.stream = fs.createReadStream(
+            req.context.file.path,
+            req.context.range
         );
 
-        req.stream.on('error', next);
+        req.context.stream.on('error', next);
     }
 
     next();

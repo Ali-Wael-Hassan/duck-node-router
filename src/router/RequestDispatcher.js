@@ -17,8 +17,7 @@ class RequestDispatcher {
             return;
 
         if (!route) {
-            res.statusCode = 404;
-            res.end("Not Found");
+            res.status(404).send('Not Found');
             return;
         }
 

@@ -9,27 +9,27 @@ const compress = ({
         mime !== 'application/gzip'
 } = {}) => (req, res, next) => {
 
-    if (!req.file || !req.stream)
+    if (!req.context.file || !req.context.stream)
         return next();
 
-    if (!filter(req.file.mime))
+    if (!filter(req.context.file.mime))
         return next();
 
-    const encoding = req.headers['accept-encoding'] || '';
+    const encoding = req.get('accept-encoding') || '';
 
     if (brotli && encoding.includes('br')) {
-        res.setHeader('Content-Encoding', 'br');
-        res.removeHeader('Content-Length');
+        res.set('Content-Encoding', 'br');
+        res.remove('Content-Length');
 
-        req.stream = req.stream.pipe(
+        req.context.stream = req.context.stream.pipe(
             zlib.createBrotliCompress()
         );
     }
     else if (gzip && encoding.includes('gzip')) {
-        res.setHeader('Content-Encoding', 'gzip');
-        res.removeHeader('Content-Length');
+        res.set('Content-Encoding', 'gzip');
+        res.remove('Content-Length');
 
-        req.stream = req.stream.pipe(
+        req.context.stream = req.context.stream.pipe(
             zlib.createGzip()
         );
     }
