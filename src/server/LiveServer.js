@@ -14,6 +14,7 @@ const liveReloadClient = require('./liveReloadClient');
 
 class LiveServer {
     #router;
+    #watcher;
 
     constructor(options = {}) {
         const {
@@ -38,8 +39,10 @@ class LiveServer {
         if (corsOptions !== false)
             this.#router.use(cors(corsOptions));
 
-        if (liveReload)
-            this.#router.use(watch(root));
+        if (liveReload) {
+            this.#watcher = watch(root);
+            this.#router.use(this.#watcher.middleware);
+        }
 
         if (inject)
             this.#router.use(
@@ -74,6 +77,10 @@ class LiveServer {
         );
 
         return server;
+    }
+
+    close() {
+        this.#watcher?.close();
     }
 }
 

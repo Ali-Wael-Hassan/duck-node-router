@@ -70,7 +70,7 @@ The static pipeline communicates through `req.context` (never by mutating `req` 
 
 ## LiveServer
 
-`LiveServer` extends `StaticServer`'s design with development features: a `watch` middleware streams reload events over SSE (`/__live_reload`), and an `injectScript` middleware injects the `liveReloadClient` script into served HTML so the browser auto-refreshes on change.
+`LiveServer` extends `StaticServer`'s design with development features: a `watch` middleware streams reload events over SSE (`/__live_reload`), and an `injectScript` middleware injects the `liveReloadClient` script into served HTML so the browser auto-refreshes on change. `watch()` returns `{ middleware, close }` — the `close()` method stops the watcher and ends connected clients; `LiveServer.close()` delegates to it for graceful shutdown.
 
 ```text
 LiveServer
@@ -86,7 +86,7 @@ LiveServer
 | Component | Responsibility |
 |-----------|----------------|
 | **LiveServer** | Development HTTP server with live reload on top of the static pipeline |
-| **watch middleware** | Watches `root` and broadcasts reload events over SSE |
+| **watch middleware** | Watches `root` and broadcasts reload events over SSE; `close()` stops the watcher and ends clients |
 | **injectScript middleware** | Injects the `liveReloadClient` script into HTML responses |
 | **liveReloadClient** | Browser-side script that listens for reload events and refreshes the page |
 
@@ -314,6 +314,8 @@ const server = new LiveServer({
 server.listen(3000);
 ```
 
+`LiveServer.close()` stops the file watcher (via `watch()`'s `close()`) and ends connected SSE clients for graceful shutdown.
+
 | Option | Default | Description |
 |--------|---------|-------------|
 | `root` | `'.'` | Directory to serve |
@@ -348,7 +350,7 @@ npm test
 | **cors** | Default headers, origin restriction, OPTIONS preflight |
 | **injectScript** | HTML injection, non-HTML passthrough |
 | **directory** | Directory listing, index.html, non-directory fallthrough, missing dir |
-| **watch** | SSE endpoint, non-livereload passthrough |
+| **watch** | SSE endpoint, non-livereload passthrough, `close()` cleanup (broadcast test runs off win32) |
 | **Integration** | Full HTTP server with GET, 404, body parsing, CORS |
 | **Nested Routes** | Prefix stripping, nested params, query forwarding, nested middleware, all HTTP methods, nested + normal route interop, deep nesting, precedence |
 
@@ -358,11 +360,7 @@ npm test
 
 # Known Issues
 
-- **`watch` middleware leaks an `fs.watch` handle.** `watch()` calls `fs.watch(directory, { recursive: true }, ...)` once at setup and never closes it. Running the full test suite therefore leaves an active handle that prevents `node --test` from exiting; on Windows the recursive watcher over a removed directory can also keep allocating until the process runs out of memory. To work around it, run a targeted subset, e.g.:
-
-```sh
-node --test --test-name-pattern="MiddlewarePipeline" tests/index.js
-```
+- **`fs.watch({ recursive: true })` crashes on Windows when a directory entry changes.** libuv's Windows recursive watcher hard-aborts the process (uncatchable `Assertion failed: !_wcsnicmp(filename, dir, dirlen)`, `src\win\fs-event.c`) whenever a file or directory inside the watched tree is created, modified, or removed. This affects any recursive `fs.watch` usage on Windows — including `watch()` — so the SSE-broadcast test is guarded to run only on non-Windows platforms. The prior handle-leak that kept `node --test` from exiting is fixed: `watch()` now returns `{ middleware, close }`, and tests call `close()` to stop the watcher.
 
 ---
 
@@ -415,24 +413,18 @@ node --test --test-name-pattern="MiddlewarePipeline" tests/index.js
 - [x] Logger
 - [x] Static file middleware (composed pipeline: resolve → cache → stream → compress → send)
 - [x] HTML script injection middleware
-- [x] Live reload middleware
+- [x] Live reload middleware (`watch()` returns `{ middleware, close }`)
 - [x] CORS
 - [x] Directory listing
 - [x] HTTP caching (ETag, Last-Modified, Range requests)
 - [x] Compression (gzip, brotli)
 - [x] Nested / mounted routers (`router.get(url, anotherRouter)`)
-- [x] Test suite (76 tests)
+- [x] Test suite (77 tests)
 
 ### Projects Built on the Router
 
 - [x] Static file server (`StaticServer`)
 - [x] Live Server (`LiveServer`)
-
----
-
-## 🚧 In Progress
-
-- [ ] Fix `watch` middleware `fs.watch` handle leak (see [Known Issues](#known-issues))
 
 ---
 

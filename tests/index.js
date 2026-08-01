@@ -43,6 +43,11 @@ function mockRes() {
     raw.hasHeader = (k) => k in raw.headers;
     raw.removeHeader = (k) => { delete raw.headers[k]; };
     raw.writeHead = function (code, h) { raw.statusCode = code; if (h) Object.assign(raw.headers, h); };
+    raw.write = function (chunk) {
+        raw.written = (raw.written || '') + chunk;
+        raw.body = raw.written;
+        return true;
+    };
     raw.end = function (data) {
         raw.writableEnded = true;
         raw.body = data;
@@ -745,26 +750,71 @@ describe('directory', () => {
 describe('watch', () => {
     it('passes through for non-livereload URL', async () => {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'router-test-'));
-        const mw = watch(dir);
+        const w = watch(dir);
         const req = mockReq({ url: '/something' });
         const res = mockRes();
 
         let called = false;
-        await mw(req, res, () => { called = true; });
+        await w.middleware(req, res, () => { called = true; });
         assert.strictEqual(called, true);
 
+        w.close();
         fs.rmSync(dir, { recursive: true, force: true });
     });
 
     it('responds with SSE for live reload endpoint', async () => {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'router-test-'));
-        const mw = watch(dir);
+        const w = watch(dir);
         const req = mockReq({ url: '/__live_reload' });
         const res = mockRes();
 
-        await mw(req, res, () => {});
+        await w.middleware(req, res, () => {});
         assert.strictEqual(res.get('Content-Type'), 'text/event-stream');
         assert.strictEqual(res.writableEnded, false);
+
+        w.close();
+        fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    // Skipped on win32: libuv's recursive fs.watch hard-aborts the process
+    // (uncatchable) when an entry changes inside a watched directory
+    // (nodejs/libuv Windows bug, src\win\fs-event.c).
+    if (process.platform !== 'win32') {
+        it('broadcasts reload events to connected clients', async () => {
+            const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'router-test-'));
+            const w = watch(dir);
+            const req = mockReq({ url: '/__live_reload' });
+            const res = mockRes();
+
+            await w.middleware(req, res, () => {});
+
+            const file = path.join(dir, 'file.txt');
+            fs.writeFileSync(file, 'hello');
+            fs.appendFileSync(file, ' world');
+
+            const deadline = Date.now() + 2000;
+            while (!res.body && Date.now() < deadline) {
+                await new Promise((r) => setTimeout(r, 10));
+            }
+
+            assert.ok(res.body, 'expected a reload event');
+            assert.ok(res.body.includes('data: reload'));
+
+            w.close();
+            fs.rmSync(dir, { recursive: true, force: true });
+        });
+    }
+
+    it('close() ends connected clients and stops the watcher', async () => {
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'router-test-'));
+        const w = watch(dir);
+        const req = mockReq({ url: '/__live_reload' });
+        const res = mockRes();
+
+        await w.middleware(req, res, () => {});
+        w.close();
+
+        assert.strictEqual(res.writableEnded, true);
 
         fs.rmSync(dir, { recursive: true, force: true });
     });
